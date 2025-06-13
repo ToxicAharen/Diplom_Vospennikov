@@ -3,7 +3,8 @@ import psycopg2
 from psycopg2 import sql
 from psycopg2.extras import execute_batch
 import logging
-from datetime import datetime
+from db_config import DB_CONFIG
+
 
 # Настройка логирования
 logging.basicConfig(
@@ -12,6 +13,7 @@ logging.basicConfig(
     filename='data_processing.log'
 )
 logger = logging.getLogger(__name__)
+
 
 def load_data_to_postgres(df, table_name, connection_params):
     """Загружает DataFrame в PostgreSQL"""
@@ -69,6 +71,7 @@ def load_data_to_postgres(df, table_name, connection_params):
             cursor.close()
             conn.close()
 
+
 def process_excel_to_postgres():
     """Основная функция обработки данных"""
     try:
@@ -107,27 +110,25 @@ def process_excel_to_postgres():
             (df_merged["Долгота"].notna())
         ]
 
+
+        date_value = pd.to_datetime(df_merged['Дата'].dropna().iloc[0])
+        date_str = date_value.strftime('%Y-%m-%d')
+        csv_filename = f"transport_mertics_{date_str}.csv"
+
         # Сохранение в CSV
-        df_merged.to_csv("output4.csv", index=False, encoding="utf-8")
+        df_merged.to_csv(csv_filename, index=False, encoding="utf-8")
         logger.info("Данные успешно сохранены в CSV файл")
 
-        # Параметры подключения к PostgreSQL
-        db_params = {
-            "dbname": "Transport",
-            "user": "postgres",
-            "password": "Qwerty123",
-            "host": "localhost",
-            "port": "5432"
-        }
-
+    
         # Загрузка в PostgreSQL
-        load_data_to_postgres(df_merged, "transport_metrics", db_params)
+        load_data_to_postgres(df_merged, "transport_metrics", DB_CONFIG)
         
         return True
         
     except Exception as e:
         logger.error(f"Ошибка при обработке данных: {str(e)}")
         return False
+
 
 if __name__ == "__main__":
     if process_excel_to_postgres():
