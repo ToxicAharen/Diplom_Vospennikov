@@ -72,7 +72,7 @@ def load_data_to_postgres(df, table_name, connection_params):
             conn.close()
 
 
-def process_excel_to_postgres():
+def process_excel_to_postgres(file_name):
     """Основная функция обработки данных"""
     try:
         # Загрузка данных из Excel
@@ -80,7 +80,7 @@ def process_excel_to_postgres():
         
         # Загружаем данные с первого листа (транспортные показатели)
         df_metrics = pd.read_excel(
-            "Транспортные показатели_17.03.2025 00_00_17.03.2025 23_59.xlsx", 
+            file_name, 
             sheet_name=0
         ).rename(columns={
             "Средняя скорость, км/ч (за период)": "Скорость",
@@ -89,7 +89,7 @@ def process_excel_to_postgres():
 
         # Загружаем данные со второго листа (адреса и координаты)
         df_coords = pd.read_excel(
-            "Транспортные показатели_17.03.2025 00_00_17.03.2025 23_59.xlsx", 
+            file_name, 
             sheet_name=1,
             usecols=["Адресная привязка", "Долгота", "Широта"]
         ).rename(columns={"Адресная привязка": "Адрес"})
@@ -128,6 +128,9 @@ def process_excel_to_postgres():
     except Exception as e:
         logger.error(f"Ошибка при обработке данных: {str(e)}")
         return False
+
+
+file_name="Транспортные показатели_17.03.2025 00_00_17.03.2025 23_59.xlsx"
 
 
 if __name__ == "__main__":

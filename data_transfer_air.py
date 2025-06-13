@@ -72,7 +72,7 @@ def load_data_to_postgres(df, table_name, connection_params):
             conn.close()
 
 
-def process_excel_to_postgres():
+def process_excel_to_postgres(file_name):
     """Основная функция обработки данных"""
     try:
         # Загрузка данных из Excel
@@ -80,24 +80,24 @@ def process_excel_to_postgres():
         
         # Загружаем данные с первого листа (транспортные показатели)
         df_CO = pd.read_excel(
-            "report_Экология_за час_17.03.2025 00_00_17.03.2025 23_59.xlsx", 
+            file_name, 
             sheet_name=0
         )
 
         # Загружаем данные с первого листа (транспортные показатели)
         df_NO = pd.read_excel(
-            "report_Экология_за час_17.03.2025 00_00_17.03.2025 23_59.xlsx", 
+            file_name, 
             sheet_name=1
         )
 
         # Загружаем данные с первого листа (транспортные показатели)
         df_NO2 = pd.read_excel(
-            "report_Экология_за час_17.03.2025 00_00_17.03.2025 23_59.xlsx", 
+            file_name, 
             sheet_name=2
         )
         # Загружаем данные с первого листа (транспортные показатели)
         df_SO2 = pd.read_excel(
-            "report_Экология_за час_17.03.2025 00_00_17.03.2025 23_59.xlsx", 
+            file_name, 
             sheet_name=3
         )
 
@@ -125,8 +125,11 @@ def process_excel_to_postgres():
         return False
 
 
+file_name ="report_Экология_за час_17.03.2025 00_00_17.03.2025 23_59.xlsx"
+
+
 if __name__ == "__main__":
-    if process_excel_to_postgres():
+    if process_excel_to_postgres(file_name):
         print("Обработка данных успешно завершена!")
     else:
         print("Произошла ошибка при обработке данных. Проверьте лог-файл.")
