@@ -212,13 +212,6 @@ def update_graphs(selected_address, start_date, end_date):
         paper_bgcolor="#f4f4f4"
     )
 
-
-
-
-
-
-
-
      
     top_flow_df = filtered_df.groupby("Адрес")["Поток"].sum().nlargest(10).reset_index()
     fig_top_flow = go.Figure()
@@ -256,13 +249,6 @@ def update_graphs(selected_address, start_date, end_date):
         plot_bgcolor="#f9f9f9",
         paper_bgcolor="#f4f4f4"
     )
-
-
-
-
-
-
-
 
 
     # Карта
