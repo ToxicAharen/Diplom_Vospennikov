@@ -306,13 +306,17 @@ def update_graphs(selected_address, start_date, end_date):
     fig_map = go.Figure()
     
     # Топ-10 адресов
-    df_top_points = filtered_df[filtered_df["Адрес"].isin(top_addresses)]
+    top_addresses_sum = (
+    filtered_df.groupby("Адрес", as_index=False)["Поток"].sum().sort_values("Поток", ascending=False).head(10))
+    top_addresses_coords = (filtered_df.drop_duplicates(subset="Адрес")[["Адрес", "lat", "lon"]].merge(top_addresses_sum, on="Адрес"))
+
+    
     fig_map.add_trace(go.Scattermapbox(
-        lat=df_top_points["lat"],
-        lon=df_top_points["lon"],
+        lat=top_addresses_coords["lat"],
+        lon=top_addresses_coords["lon"],
         mode="markers",
         marker=dict(size=18, color="darkred", opacity=0.9),
-        text=df_top_points.apply(lambda x: f"{x['Адрес']}<br>Поток: {x['Поток']}", axis=1),
+        text=top_addresses_coords.apply(lambda x: f"{x['Адрес']}<br>Поток: {x['Поток']}", axis=1),
         textposition="top right",
         name="Наиболее загруженные участки"
     ))
