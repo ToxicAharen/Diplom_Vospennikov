@@ -109,13 +109,3 @@ def process_excel_to_postgres_air(file_name):
     except Exception as e:
         logger.error(f"Ошибка при обработке данных: {str(e)}")
         return False
-
-
-# file_name ="report_Экология_за час_17.03.2025 00_00_17.03.2025 23_59.xlsx"
-
-
-# if __name__ == "__main__":
-#     if process_excel_to_postgres(file_name):
-#         print("Обработка данных успешно завершена!")
-#     else:
-#         print("Произошла ошибка при обработке данных. Проверьте лог-файл.")

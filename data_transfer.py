@@ -121,17 +121,10 @@ def process_excel_to_postgres(file_name):
 
     
         # Загрузка в PostgreSQL
-        load_data_to_postgres(df_merged, "transport_metrics3", DB_CONFIG)
+        load_data_to_postgres(df_merged, "transport_metrics", DB_CONFIG)
         
         return True
         
     except Exception as e:
         logger.error(f"Ошибка при обработке данных: {str(e)}")
         return False
-
-
-# if __name__ == "__main__":
-#     if process_excel_to_postgres():
-#         print("Обработка данных успешно завершена!")
-#     else:
-#         print("Произошла ошибка при обработке данных. Проверьте лог-файл.")
