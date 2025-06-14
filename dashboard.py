@@ -1,9 +1,13 @@
 import pandas as pd
 import plotly.graph_objects as go
-from dash import Dash, dcc, html, Input, Output
+from dash import Dash, dcc, html, Input, Output, State  
 import psycopg2
 import logging
+import base64
+import os
 from db_config import DB_CONFIG
+from data_transfer import process_excel_to_postgres
+from data_transfer_air import process_excel_to_postgres_air
 
 
 # Настройка логирования
@@ -82,68 +86,115 @@ app.layout = html.Div([
     html.H1("Анализ транспортного потока и загрязнений", style={"textAlign": "center"}),
 
     html.Div([
-        html.Div([
-            html.Label("Выберите период:"),
-            dcc.DatePickerRange(
-                id='date-picker',
-                min_date_allowed=min_date,
-                max_date_allowed=max_date,
-                start_date=min_date,
-                end_date=max_date,
-                display_format='YYYY-MM-DD'
-            )
-        ], style={"marginBottom": "20px"}),
+        html.Label("Выберите период:"),
+        dcc.DatePickerRange(
+            id='date-picker',
+            min_date_allowed=min_date,
+            max_date_allowed=max_date,
+            start_date=min_date,
+            end_date=max_date,
+            display_format='YYYY-MM-DD'
+        )
+    ], style={"marginBottom": "20px"}),
 
-        html.Div([
-            html.Label("Выберите адрес (транспорт):"),
-            dcc.Dropdown(id="address-dropdown", options=[], value=None, clearable=False)
-        ], style={"marginBottom": "30px"}),
+    html.Div([
+        html.Label("Выберите адрес (транспорт):"),
+        dcc.Dropdown(id="address-dropdown", options=[], value=None, clearable=False)
+    ], style={"marginBottom": "30px"}),
 
-        html.H3("График скорости и потока транспорта"),
-        dcc.Graph(id="comparison-graph", style={"height": "450px"}),
+    html.H3("График скорости и потока транспорта"),
+    dcc.Graph(id="comparison-graph", style={"height": "450px"}),
 
-        html.H3("Географическая карта"),
-        dcc.Graph(id="map-graph", style={"height": "700px"}),
+    html.H3("Географическая карта"),
+    dcc.Graph(id="map-graph", style={"height": "700px"}),
+
+    html.H3("Наиболее загруженные участки"),
+    dcc.Graph(id="top-flow-graph"),
+
+    html.H3("Участки с минимальной скоростью"),
+    dcc.Graph(id="low-speed-graph"),
+
+    html.Hr(),
+    html.H2("Анализ загрязнителей воздуха", style={"marginTop": "40px"}),
+
+    html.Div([
+        html.Label("Выберите адрес (загрязнение):"),
+        dcc.Dropdown(
+            id="pollution-address-dropdown",
+            options=[{"label": addr, "value": addr} for addr in pollution_df["Адрес"].unique()],
+            value=pollution_df["Адрес"].unique()[0],
+            clearable=False
+        )
+    ], style={"marginBottom": "20px"}),
+
+    html.Div([
+        html.Label("Выберите типы загрязнителей:"),
+        dcc.Checklist(
+            id="pollutant-selector",
+            options=[
+                {"label": "CO", "value": "co"},
+                {"label": "NO", "value": "no"},
+                {"label": "NO₂", "value": "no2"},
+                {"label": "SO₂", "value": "so2"},
+            ],
+            value=["co", "no", "no2", "so2"],
+            labelStyle={"display": "inline-block", "marginRight": "15px"}
+        )
+    ], style={"marginBottom": "30px"}),
+
+    dcc.Graph(id="pollution-graph"),
+
+    html.Hr(),
 
 
-        html.H3("Наиболее загруженные участки"),
-        dcc.Graph(id="top-flow-graph"),
-
-        html.H3("Участки с минимальной скоростью"),
-        dcc.Graph(id="low-speed-graph"),
+    # Загрузка Excel-файла — перемещена в самый низ
 
 
-        html.Hr(),
-        html.H2("Анализ загрязнителей воздуха", style={"marginTop": "40px"}),
+html.Div([
+    html.H2("Загрузка данных", style={"marginTop": "40px"}),
 
-        html.Div([
-            html.Label("Выберите адрес (загрязнение):"),
-            dcc.Dropdown(
-                id="pollution-address-dropdown",
-                options=[{"label": addr, "value": addr} for addr in pollution_df["Адрес"].unique()],
-                value=pollution_df["Адрес"].unique()[0],
-                clearable=False
-            )
-        ], style={"marginBottom": "20px"}),
+    html.H3("Загрузка транспортных данных"),
+    dcc.Upload(
+        id='upload-traffic-data',
+        children=html.Div(['Перетащите или выберите Excel-файл с транспортными данными']),
+        style={
+            'width': '100%',
+            'height': '60px',
+            'lineHeight': '60px',
+            'borderWidth': '1px',
+            'borderStyle': 'dashed',
+            'borderRadius': '5px',
+            'textAlign': 'center',
+            'marginBottom': '20px'
+        },
+        multiple=False
+    ),
+    html.Div(id='traffic-upload-status'),
 
-        html.Div([
-            html.Label("Выберите типы загрязнителей:"),
-            dcc.Checklist(
-                id="pollutant-selector",
-                options=[
-                    {"label": "CO", "value": "co"},
-                    {"label": "NO", "value": "no"},
-                    {"label": "NO₂", "value": "no2"},
-                    {"label": "SO₂", "value": "so2"},
-                ],
-                value=["co", "no", "no2", "so2"],
-                labelStyle={"display": "inline-block", "marginRight": "15px"}
-            )
-        ], style={"marginBottom": "30px"}),
+    html.H3("Загрузка данных о загрязнении воздуха"),
+    dcc.Upload(
+        id='upload-pollution-data',
+        children=html.Div(['Перетащите или выберите Excel-файл с экологическими данными']),
+        style={
+            'width': '100%',
+            'height': '60px',
+            'lineHeight': '60px',
+            'borderWidth': '1px',
+            'borderStyle': 'dashed',
+            'borderRadius': '5px',
+            'textAlign': 'center',
+            'marginBottom': '20px'
+        },
+        multiple=False
+    ),
+    html.Div(id='pollution-upload-status'),
+    html.Hr()
+    ])
+], style={"width": "90%", "margin": "0 auto", "padding": "20px"})
 
-        dcc.Graph(id="pollution-graph")
-    ], style={"width": "90%", "margin": "0 auto", "padding": "20px"})
-])
+
+
+
 
 
 @app.callback(
@@ -369,6 +420,67 @@ def update_pollution_graph(pollution_address, selected_pollutants, start_date, e
         paper_bgcolor="#f4f4f4"
     )
     return fig
+
+
+UPLOAD_FOLDER = "uploaded_files"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+@app.callback(
+    Output('traffic-upload-status', 'children'),
+    Input('upload-traffic-data', 'contents'),
+    State('upload-traffic-data', 'filename')
+)
+def handle_file_upload(contents, filename):
+    if contents is None:
+        return ""
+
+    try:
+        content_type, content_string = contents.split(',')
+        decoded = base64.b64decode(content_string)
+
+        # Сохраняем файл во временную папку
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        with open(file_path, "wb") as f:
+            f.write(decoded)
+
+        # Запускаем функцию обработки файла
+        result = process_excel_to_postgres(file_path)
+
+        if result:
+            return f"✅ Файл {filename} успешно загружен и обработан."
+        else:
+            return f"❌ Ошибка при обработке файла {filename}. Проверьте содержимое."
+
+    except Exception as e:
+        return f"⚠️ Ошибка: {str(e)}"
+    
+
+@app.callback(
+    Output('pollution-upload-status', 'children'),
+    Input('upload-pollution-data', 'contents'),
+    State('upload-pollution-data', 'filename')
+)
+def handle_pollution_upload(contents, filename):
+    if contents is None:
+        return ""
+
+    try:
+        content_type, content_string = contents.split(',')
+        decoded = base64.b64decode(content_string)
+
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        with open(file_path, "wb") as f:
+            f.write(decoded)
+
+        result = process_excel_to_postgres_air(file_path)
+
+        if result:
+            return f"✅ Файл {filename} успешно загружен и обработан (экология)."
+        else:
+            return f"❌ Ошибка при обработке экологического файла {filename}. Проверьте содержимое."
+    except Exception as e:
+        return f"⚠️ Ошибка загрузки экологического файла: {str(e)}"
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)
