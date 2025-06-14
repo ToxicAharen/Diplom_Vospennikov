@@ -23,7 +23,7 @@ def load_data_to_postgres(df, table_name, connection_params):
         
         # Создаем таблицу, если она не существует
         create_table_query = sql.SQL("""
-         CREATE TABLE IF NOT EXISTS air_pollution (
+         CREATE TABLE IF NOT EXISTS {} (
             id SERIAL PRIMARY KEY,
             Адрес TEXT,
             Время TIME,
@@ -72,34 +72,20 @@ def load_data_to_postgres(df, table_name, connection_params):
             conn.close()
 
 
-def process_excel_to_postgres(file_name):
+def process_excel_to_postgres_air(file_name):
     """Основная функция обработки данных"""
     try:
         # Загрузка данных из Excel
         logger.info("Начало обработки файла Excel")
         
-        # Загружаем данные с первого листа (транспортные показатели)
-        df_CO = pd.read_excel(
-            file_name, 
-            sheet_name=0
-        )
 
-        # Загружаем данные с первого листа (транспортные показатели)
-        df_NO = pd.read_excel(
-            file_name, 
-            sheet_name=1
-        )
+        df_CO = pd.read_excel(file_name, sheet_name=0)
 
-        # Загружаем данные с первого листа (транспортные показатели)
-        df_NO2 = pd.read_excel(
-            file_name, 
-            sheet_name=2
-        )
-        # Загружаем данные с первого листа (транспортные показатели)
-        df_SO2 = pd.read_excel(
-            file_name, 
-            sheet_name=3
-        )
+        df_NO = pd.read_excel(file_name, sheet_name=1)
+
+        df_NO2 = pd.read_excel(file_name, sheet_name=2)
+    
+        df_SO2 = pd.read_excel(file_name, sheet_name=3)
 
         # Объединение данных
         df_merged = df_CO.join(df_NO["NO(мг/м3)"]).join(df_NO2["NO2(мг/м3)"]).join(df_SO2["SO2(мг/м3)"])
@@ -125,11 +111,11 @@ def process_excel_to_postgres(file_name):
         return False
 
 
-file_name ="report_Экология_за час_17.03.2025 00_00_17.03.2025 23_59.xlsx"
+# file_name ="report_Экология_за час_17.03.2025 00_00_17.03.2025 23_59.xlsx"
 
 
-if __name__ == "__main__":
-    if process_excel_to_postgres(file_name):
-        print("Обработка данных успешно завершена!")
-    else:
-        print("Произошла ошибка при обработке данных. Проверьте лог-файл.")
+# if __name__ == "__main__":
+#     if process_excel_to_postgres(file_name):
+#         print("Обработка данных успешно завершена!")
+#     else:
+#         print("Произошла ошибка при обработке данных. Проверьте лог-файл.")
