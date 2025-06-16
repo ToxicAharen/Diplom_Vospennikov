@@ -27,8 +27,10 @@ def load_data_to_postgres(df, table_name, connection_params):
             id SERIAL PRIMARY KEY,
             Адрес TEXT,
             Время TIME,
+            Направление INT,
+            Номер_полосы INT,                          
             Скорость NUMERIC,
-            Поток NUMERIC,
+            Поток INT,
             Широта NUMERIC,
             Долгота NUMERIC,
             Дата DATE
@@ -44,6 +46,8 @@ def load_data_to_postgres(df, table_name, connection_params):
             record = (
                 row['Адрес'],
                 row['Время'],
+                row['Направление'],
+                row['Номер полосы'],
                 row['Скорость'],
                 row['Поток'],
                 row['Широта'],
@@ -54,8 +58,8 @@ def load_data_to_postgres(df, table_name, connection_params):
         
         # Вставляем данные пачками
         insert_query = sql.SQL("""
-        INSERT INTO {} (Адрес, Время, Скорость, Поток, Широта, Долгота, Дата)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO {} (Адрес, Время, Направление, Номер_полосы, Скорость, Поток, Широта, Долгота, Дата)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """).format(sql.Identifier(table_name))
         
         execute_batch(cursor, insert_query, records)
