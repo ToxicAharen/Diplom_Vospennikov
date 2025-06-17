@@ -1,6 +1,6 @@
 import pandas as pd
 import plotly.graph_objects as go
-from dash import Dash, dcc, html, Input, Output, State  
+from dash import Dash, dcc, html, Input, Output, State, dash_table  
 import psycopg2
 import logging
 import base64
@@ -104,6 +104,34 @@ app.layout = html.Div([
 
     html.H3("График скорости и потока транспорта"),
     dcc.Graph(id="comparison-graph", style={"height": "450px"}),
+
+
+     html.H3("Оценка адресов"),
+    dash_table.DataTable(
+        id='los-table',
+        columns=[
+            {"name": "Адрес", "id": "Адрес"},
+            {"name": "Дата", "id": "date"},
+            {"name": "Время", "id": "Время"},
+            {"name": ["Оценка по коэфф. скорости участка"], "id": "LOS_kv"},
+            {"name": "Оценка по коэфф. загрузки участка", "id": "LOS_z"}
+        ],
+        style_table={"overflowX": "auto"},
+        style_cell={
+            "textAlign": "center",
+            "padding": "8px",
+            "fontFamily": "Arial"
+        },
+        style_header={
+            "backgroundColor": "#f2f2f2",
+            "fontWeight": "bold"
+        }, 
+        
+        page_size=15,
+        sort_action='native',
+        filter_action='native'
+    ),
+
 
     html.H3("Географическая карта"),
     dcc.Graph(id="map-graph", style={"height": "700px"}),
@@ -217,6 +245,7 @@ def update_address_dropdown(start_date, end_date):
     Output("map-graph", "figure"),
     Output("top-flow-graph", "figure"),
     Output("low-speed-graph", "figure"),
+    Output("los-table", "data"),
     Input("address-dropdown", "value"),
     Input("date-picker", "start_date"),
     Input("date-picker", "end_date")
@@ -234,19 +263,21 @@ def update_graphs(selected_address, start_date, end_date):
     }).reset_index()
 
 
-    df_top10 = df.groupby("Адрес").agg({"Поток": "sum"}).reset_index()
+    df_top10 = filtered_df.groupby("Адрес").agg({"Поток": "sum"}).reset_index()
     df_top10 = df_top10.sort_values("Поток", ascending=False).head(10)
-    top_addresses = df_top10["Адрес"].tolist()
+   
 
-    df_speed = df[df["Скорость"] > 0]
+    df_speed = filtered_df[filtered_df["Скорость"] > 0]
     low_speed_addresses = df_speed.groupby("Адрес")["Скорость"].mean().nsmallest(10).index
-    df_low_speed = df[df["Адрес"].isin(low_speed_addresses)]
+    df_low_speed = filtered_df[filtered_df["Адрес"].isin(low_speed_addresses)]
 
-    high_speed_threshold = df["Скорость"].quantile(0.95)
-    high_flow_threshold = df["Поток"].quantile(0.95)
-    risky_points = df[(df["Скорость"] >= high_speed_threshold) & 
-                                (df["Поток"] >= high_flow_threshold)]
+
+    high_speed_threshold = filtered_df["Скорость"].quantile(0.95)
+    high_flow_threshold = filtered_df["Поток"].quantile(0.95)
+    risky_points = filtered_df[(filtered_df["Скорость"] >= high_speed_threshold) & (filtered_df["Поток"] >= high_flow_threshold)]
     risky_sample = risky_points.sample(n=min(10, len(risky_points)), random_state=42)
+
+
 
 
     dff = grouped[grouped["Адрес"] == selected_address]
@@ -361,16 +392,7 @@ def update_graphs(selected_address, start_date, end_date):
         name='Адреса'
     ))
     
-    # Подсветка выбранного адреса
-    selected = filtered_df[filtered_df['Адрес'] == selected_address]
-    if not selected.empty:
-        fig_map.add_trace(go.Scattermapbox(
-            lat=selected['lat'],
-            lon=selected['lon'],
-            mode='markers',
-            marker=dict(size=15, color='red'),
-            name='Выбранный адрес'
-        ))
+   
     
     fig_map.update_layout(
         mapbox_style="open-street-map",
@@ -385,7 +407,110 @@ def update_graphs(selected_address, start_date, end_date):
     )
     
 
-    return fig_graph, fig_map, fig_top_flow, fig_low_speed
+    Q_capacity = 1800  # нормативная пропускная способность на одну полосу, авт./ч
+    V_free = 20        # скорость свободного потока, км/ч
+
+    # Расчёт коэффициента загрузки z и коэффициента скорости kv
+    filtered_df["z"] = filtered_df["Поток"] / Q_capacity
+    filtered_df["kv"] = filtered_df["Скорость"] / V_free
+
+    # Функция для определения LOS по kv
+    def get_los_kv(kv):
+        if kv >= 0.9:
+            return "A"
+        elif kv >= 0.8:
+            return "B"
+        elif kv >= 0.7:
+            return "C"
+        elif kv >= 0.6:
+            return "D"
+        elif kv >= 0.5:
+            return "E"
+        else:
+            return "F"
+
+    # Функция для определения LOS по z
+    def get_los_z(z):
+        if z <= 0.2:
+            return "A"
+        elif z <= 0.45:
+            return "B"
+        elif z <= 0.65:
+            return "C"
+        elif z <= 0.9:
+            return "D"
+        elif z <= 1:
+            return "E"
+        else:
+            return "F"
+
+    # Применение функций к датафрейму
+    filtered_df["LOS_kv"] = filtered_df["kv"].apply(get_los_kv)
+    filtered_df["LOS_z"] = filtered_df["z"].apply(get_los_z)
+
+
+    # Цветовая карта по уровням обслуживания
+    los_colors = {
+        "A": "green",
+        "B": "lime",
+        "C": "yellow",
+        "D": "orange",
+        "E": "orangered",
+        "F": "red"
+}
+
+    # Добавим столбец с цветами
+    filtered_df["los_color_z"] = filtered_df["LOS_z"].map(los_colors)
+    filtered_df["los_color_kv"] = filtered_df["LOS_kv"].map(los_colors)
+# Добавим Scattermapbox с цветами по LOS_z
+    fig_map.add_trace(go.Scattermapbox(
+        lat=filtered_df['lat'],
+        lon=filtered_df['lon'],
+        mode='markers',
+        marker=dict(
+            size=15,
+            color=filtered_df['los_color_z'],
+            opacity=0.85
+        ),
+        text=filtered_df.apply(lambda x: f"""
+            {x['Адрес']}<br>
+            Скорость: {x['Скорость']:.1f} км/ч<br>
+            Поток: {x['Поток']} авто/ч<br>
+            Уровень обслуживания: {x['LOS_z']}
+        """, axis=1),
+        hoverinfo='text',
+        name='Оценка по коэффициенту загрузки участка'
+    ))
+    
+# Добавим Scattermapbox с цветами по LOS_kv
+    fig_map.add_trace(go.Scattermapbox(
+        lat=filtered_df['lat'],
+        lon=filtered_df['lon'],
+        mode='markers',
+        marker=dict(
+            size=15,
+            color=filtered_df['los_color_kv'],
+            opacity=0.85
+        ),
+        text=filtered_df.apply(lambda x: f"""
+            {x['Адрес']}<br>
+            Скорость: {x['Скорость']:.1f} км/ч<br>
+            Поток: {x['Поток']} авто/ч<br>
+            Уровень обслуживания: {x['LOS_kv']}
+        """, axis=1),
+        hoverinfo='text',
+        name='Оценка по коэффициенту скорости участка'
+    ))
+
+ # 🟢 Таблица LOS
+    los_df = filtered_df[
+    (filtered_df["Адрес"] == selected_address) &
+    (filtered_df["date"] >= pd.to_datetime(start_date)) &
+    (filtered_df["date"] <= pd.to_datetime(end_date))][["Адрес", "date", "Время", "LOS_kv", "LOS_z"]].copy()
+    los_df["date"] = los_df["date"].dt.date
+
+    return fig_graph, fig_map, fig_top_flow, fig_low_speed, los_df.to_dict("records")
+
 
 @app.callback(
     Output("pollution-graph", "figure"),
